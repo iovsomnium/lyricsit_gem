@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Shield, Trash2, Clock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -13,6 +12,7 @@ interface MemoCardProps {
   onDelete: (id: string) => void;
   onCheckSimilarity: (id: string) => void;
   isCheckingNow: boolean;
+  isCheckingCurrent: boolean;
 }
 
 export function MemoCard({
@@ -20,9 +20,8 @@ export function MemoCard({
   onDelete,
   onCheckSimilarity,
   isCheckingNow,
+  isCheckingCurrent,
 }: MemoCardProps) {
-  const [showActions, setShowActions] = useState(false);
-
   const previewLines = memo.content
     .split("\n")
     .filter(Boolean)
@@ -40,10 +39,8 @@ export function MemoCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2 }}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
     >
-      <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+      <Card className="overflow-hidden transition-shadow hover:shadow-md">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
@@ -95,32 +92,26 @@ export function MemoCard({
           </Badge>
         </div>
 
-        {/* Actions */}
-        {showActions && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 flex items-center justify-center gap-2 bg-surface/95 backdrop-blur-sm"
+        <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onCheckSimilarity(memo.id)}
+            disabled={isCheckingNow}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onCheckSimilarity(memo.id)}
-              disabled={isCheckingNow}
-            >
-              <Shield className="h-4 w-4" />
-              {isCheckingNow ? "Checking..." : "Similarity Check"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(memo.id)}
-            >
-              <Trash2 className="h-4 w-4 text-warning-red" />
-              Delete
-            </Button>
-          </motion.div>
-        )}
+            <Shield className="h-4 w-4" />
+            {isCheckingCurrent ? "Checking..." : "Similarity Check"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(memo.id)}
+            disabled={isCheckingNow}
+          >
+            <Trash2 className="h-4 w-4 text-warning-red" />
+            Delete
+          </Button>
+        </div>
       </Card>
     </motion.div>
   );

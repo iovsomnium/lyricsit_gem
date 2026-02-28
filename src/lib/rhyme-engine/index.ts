@@ -1,5 +1,5 @@
 import { generateJSON } from "@/lib/gemini/client";
-import { analyzeEnglishPhonetics } from "@/lib/phonetics/english-ipa";
+import { analyzeEnglishPhonetics, splitEnglishSyllables } from "@/lib/phonetics/english-ipa";
 import { analyzeKoreanPhonetics } from "@/lib/phonetics/korean-ipa";
 import { calculateRhymeSimilarity } from "@/lib/rhyme-engine/similarity";
 import type {
@@ -17,8 +17,6 @@ type CandidateJSONResponse =
       results?: Array<{ word?: string }>;
     }
   | Array<{ word?: string } | string>;
-
-const RHYME_CACHE = new Map<string, RhymeResponse>();
 
 function toAppError(message: string): { code: "INVALID_INPUT"; message: string } {
   return { code: "INVALID_INPUT", message };
@@ -39,7 +37,7 @@ function analyzePhoneticsByLanguage(text: string, language: Language): Phonetics
   return language === "ko" ? analyzeKoreanPhonetics(text) : analyzeEnglishPhonetics(text);
 }
 
-function buildRhymePrompt(request: RhymeRequest, maxResults: number): string {
+function buildRhymePrompt(request: RhymeRequest, anchorText: string, maxResults: number): string {
   const themeInstruction = request.theme
     ? `Theme context: ${request.theme}. Favor words naturally related to this theme.`
     : "Theme context: none.";
@@ -49,11 +47,13 @@ You are a rhyme candidate generator for lyrics writing.
 Return only JSON and no extra text.
 
 Task:
-- Input text: "${request.input}"
+- Full input text: "${request.input}"
+- Rhyme focus segment (randomly chosen from input): "${anchorText}"
 - Input language: ${languageLabel(request.inputLanguage)}
 - Target language: ${languageLabel(request.targetLanguage)}
 - Generate ${maxResults} candidate words/short phrases in ${languageLabel(request.targetLanguage)}.
-- Candidates should sound similar to the input when spoken.
+- Candidates should sound similar to the rhyme focus segment when spoken.
+- Do not rely only on the very last character of the full input.
 - Return target-language candidates only.
 - Keep each candidate concise (1 to 2 words), no punctuation.
 - Do not include duplicates.
@@ -100,9 +100,10 @@ function extractRawCandidateWords(payload: CandidateJSONResponse): string[] {
 
 async function fetchCandidateWords(
   request: RhymeRequest,
+  anchorText: string,
   maxResults: number,
 ): Promise<string[]> {
-  const prompt = buildRhymePrompt(request, maxResults);
+  const prompt = buildRhymePrompt(request, anchorText, maxResults);
   const payload = await generateJSON<CandidateJSONResponse>(prompt);
   const rawWords = extractRawCandidateWords(payload);
 
@@ -122,40 +123,76 @@ async function fetchCandidateWords(
   return unique;
 }
 
-function buildCacheKey(request: RhymeRequest, maxResults: number): string {
-  return JSON.stringify({
-    input: request.input.trim(),
-    inputLanguage: request.inputLanguage,
-    targetLanguage: request.targetLanguage,
-    theme: request.theme ?? "",
-    maxResults,
-  });
+function randomIndex(length: number): number {
+  return Math.floor(Math.random() * length);
+}
+
+function pickRandom<T>(items: T[]): T {
+  return items[randomIndex(items.length)] as T;
+}
+
+function pickRandomKoreanChunk(token: string): string {
+  const chars = Array.from(token).filter((char) => /[가-힣]/u.test(char));
+  if (chars.length <= 1) return token;
+
+  const maxChunk = Math.min(3, chars.length);
+  const length = 1 + randomIndex(maxChunk);
+  const start = randomIndex(chars.length - length + 1);
+  return chars.slice(start, start + length).join("");
+}
+
+function chooseRhymeAnchor(text: string, language: Language): string {
+  if (language === "en") {
+    const words = (text.match(/[A-Za-z]+(?:'[A-Za-z]+)*/g) ?? [])
+      .map((word) => word.trim())
+      .filter(Boolean);
+
+    if (words.length >= 2) return pickRandom(words);
+    if (words.length === 1) {
+      const syllables = splitEnglishSyllables(words[0]).filter((syllable) => syllable.length > 0);
+      if (syllables.length >= 2) return pickRandom(syllables);
+      return words[0];
+    }
+
+    return text.trim();
+  }
+
+  const tokens = (text.match(/[가-힣]+/gu) ?? [])
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (tokens.length >= 2) return pickRandom(tokens);
+  if (tokens.length === 1) return pickRandomKoreanChunk(tokens[0]);
+
+  return text.trim();
 }
 
 function toRhymeCandidate(
-  input: RhymeRequest,
-  inputPhonetics: Phonetics,
+  sourceText: string,
+  sourceLanguage: Language,
+  sourcePhonetics: Phonetics,
+  targetLanguage: Language,
   candidateWord: string,
 ): RhymeCandidate {
-  const candidatePhonetics = analyzePhoneticsByLanguage(candidateWord, input.targetLanguage);
+  const candidatePhonetics = analyzePhoneticsByLanguage(candidateWord, targetLanguage);
   const similarity = calculateRhymeSimilarity(
-    input.input,
-    input.inputLanguage,
+    sourceText,
+    sourceLanguage,
     candidateWord,
-    input.targetLanguage,
+    targetLanguage,
   );
 
   return {
     word: candidateWord,
-    language: input.targetLanguage,
+    language: targetLanguage,
     phonetics: candidatePhonetics,
     similarityScore: similarity.score,
-    syllableMatch: inputPhonetics.syllableCount === candidatePhonetics.syllableCount,
+    syllableMatch: sourcePhonetics.syllableCount === candidatePhonetics.syllableCount,
   };
 }
 
 export function clearRhymeCache(): void {
-  RHYME_CACHE.clear();
+  // Rhyme search intentionally avoids caching to keep anchor selection random.
 }
 
 export async function findRhymes(request: RhymeRequest): Promise<RhymeResponse> {
@@ -170,23 +207,23 @@ export async function findRhymes(request: RhymeRequest): Promise<RhymeResponse> 
   };
 
   const maxResults = clampMaxResults(normalizedRequest.maxResults);
-  const cacheKey = buildCacheKey(normalizedRequest, maxResults);
-  const cached = RHYME_CACHE.get(cacheKey);
-  if (cached) return cached;
-
-  const inputPhonetics = analyzePhoneticsByLanguage(input, normalizedRequest.inputLanguage);
-  const candidateWords = await fetchCandidateWords(normalizedRequest, maxResults);
+  const anchorText = chooseRhymeAnchor(input, normalizedRequest.inputLanguage);
+  const inputPhonetics = analyzePhoneticsByLanguage(anchorText, normalizedRequest.inputLanguage);
+  const candidateWords = await fetchCandidateWords(normalizedRequest, anchorText, maxResults);
   const candidates = candidateWords
-    .map((candidateWord) => toRhymeCandidate(normalizedRequest, inputPhonetics, candidateWord))
+    .map((candidateWord) =>
+      toRhymeCandidate(
+        anchorText,
+        normalizedRequest.inputLanguage,
+        inputPhonetics,
+        normalizedRequest.targetLanguage,
+        candidateWord,
+      ))
     .sort((left, right) => right.similarityScore - left.similarityScore)
     .slice(0, maxResults);
 
-  const response: RhymeResponse = {
+  return {
     inputPhonetics,
     candidates,
   };
-
-  RHYME_CACHE.set(cacheKey, response);
-  return response;
 }
-

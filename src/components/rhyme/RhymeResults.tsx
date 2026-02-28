@@ -65,6 +65,11 @@ export function RhymeResults() {
 
   if (rhymeResults.length === 0) return null;
 
+  const normalizedInput = inputText.trim().toLowerCase();
+  const rhymeFocusText = inputPhonetics?.original?.trim() ?? "";
+  const isFullInputFocus = rhymeFocusText.toLowerCase() === normalizedInput;
+  const focusLabel = isFullInputFocus ? "Focus: full input" : "Focus: random segment";
+
   const isSelected = (candidate: RhymeCandidate) =>
     selectedRhymes.some(
       (r) =>
@@ -119,6 +124,13 @@ export function RhymeResults() {
         <CardTitle>Rhyme Candidates</CardTitle>
         <Badge variant="muted">{rhymeResults.length} found</Badge>
       </CardHeader>
+
+      {rhymeFocusText && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-background/45 px-3 py-2">
+          <Badge variant="muted">{focusLabel}</Badge>
+          <span className="text-sm text-foreground">&ldquo;{rhymeFocusText}&rdquo;</span>
+        </div>
+      )}
 
       <motion.ul
         className="flex flex-col gap-2"

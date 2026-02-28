@@ -7,7 +7,6 @@ import { RhymeInput } from "@/components/rhyme/RhymeInput";
 import { RhymeResults } from "@/components/rhyme/RhymeResults";
 import { LyricsGenerator } from "@/components/lyrics/LyricsGenerator";
 import { LyricsEditor } from "@/components/lyrics/LyricsEditor";
-import { SimilarityChecker } from "@/components/lyrics/SimilarityChecker";
 import { SavedMemosPanel } from "@/components/lyrics/SavedMemosPanel";
 import { Button } from "@/components/ui/Button";
 
@@ -27,7 +26,7 @@ const STEP_META: { id: FlowStep; title: string; summary: string }[] = [
   {
     id: "review",
     title: "Review & Save",
-    summary: "Edit, run similarity check, and save.",
+    summary: "Edit and save. Similarity checks run on saved lyrics.",
   },
 ];
 
@@ -201,7 +200,6 @@ export default function Home() {
             <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
               <div className="flex flex-col gap-6">
                 <LyricsEditor key={lyricsEditorKey} />
-                <SimilarityChecker />
               </div>
               <SavedMemosPanel />
             </div>

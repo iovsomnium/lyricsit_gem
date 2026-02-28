@@ -448,22 +448,18 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       ...(state.theme ? { theme: state.theme } : {}),
     };
 
-    const cacheKey = JSON.stringify(payload);
-
     set({
       isSearching: true,
       error: null,
     });
 
     try {
-      const response = await getCachedOrFetch(
-        cacheKey,
-        RHYME_CACHE,
-        RHYME_INFLIGHT,
-        () =>
-          fetchJSONWithRetry<RhymeResponse>("/api/rhyme", payload, {
-            timeoutMs: RHYME_TIMEOUT_MS,
-          }),
+      const response = await fetchJSONWithRetry<RhymeResponse>(
+        "/api/rhyme",
+        payload,
+        {
+          timeoutMs: RHYME_TIMEOUT_MS,
+        },
       );
 
       set({
@@ -502,7 +498,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       mood: state.mood,
       lineCount: options?.lineCount ?? 4,
     };
-    const cacheKey = JSON.stringify(payload);
 
     set({
       isGenerating: true,
@@ -510,14 +505,12 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     });
 
     try {
-      const response = await getCachedOrFetch(
-        cacheKey,
-        LYRICS_CACHE,
-        LYRICS_INFLIGHT,
-        () =>
-          fetchJSONWithRetry<LyricsGenerateResponse>("/api/generate", payload, {
-            timeoutMs: GENERATE_TIMEOUT_MS,
-          }),
+      const response = await fetchJSONWithRetry<LyricsGenerateResponse>(
+        "/api/generate",
+        payload,
+        {
+          timeoutMs: GENERATE_TIMEOUT_MS,
+        },
       );
 
       set({

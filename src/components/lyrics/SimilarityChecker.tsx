@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Shield, CheckCircle, AlertTriangle } from "lucide-react";
 import { useAppStore } from "@/hooks/useAppStore";
@@ -17,6 +18,40 @@ const TYPE_LABELS: Record<SimilarityType, string> = {
   semantic: "Semantic",
   structural: "Structural",
 };
+
+function RoughPanel({
+  children,
+  className,
+  color = "ink",
+  strokeWidth = 1.4,
+  iterations = 2,
+  padding = 8,
+  animationDuration = 380,
+}: {
+  children: ReactNode;
+  className?: string;
+  color?: "rhyme" | "confirm" | "warning" | "highlight" | "ink" | (string & {});
+  strokeWidth?: number;
+  iterations?: number;
+  padding?: number;
+  animationDuration?: number;
+}) {
+  return (
+    <RoughAnnotationWrapper
+      type="box"
+      as="div"
+      show
+      animate={false}
+      color={color}
+      strokeWidth={strokeWidth}
+      iterations={iterations}
+      padding={padding}
+      animationDuration={animationDuration}
+    >
+      <div className={className}>{children}</div>
+    </RoughAnnotationWrapper>
+  );
+}
 
 function splitLines(text: string): string[] {
   return text
@@ -102,85 +137,127 @@ function findBestSourceLine(lines: string[], matchedLine: string): string {
   return bestLine;
 }
 
+function buildLyricsText(lyricsDraftText: string, generatedLyrics: Array<{ text: string }>): string {
+  return (
+    lyricsDraftText.trim() ||
+    generatedLyrics
+      .map((line) => line.text.trim())
+      .filter(Boolean)
+      .join("\n")
+      .trim()
+  );
+}
+
 export function SimilarityChecker() {
+  const [hasCheckedOnce, setHasCheckedOnce] = useState(false);
   const lyricsDraftText = useAppStore((s) => s.lyricsDraftText);
   const generatedLyrics = useAppStore((s) => s.generatedLyrics);
   const similarityResults = useAppStore((s) => s.similarityResults);
   const isChecking = useAppStore((s) => s.isCheckingSimilarity);
   const checkSimilarity = useAppStore((s) => s.checkSimilarity);
 
-  const hasLyrics = generatedLyrics.length > 0;
+  const lyricsToCheck = buildLyricsText(lyricsDraftText, generatedLyrics);
+  const hasLyrics = Boolean(lyricsToCheck);
   const hasResults = similarityResults.length > 0;
   const hasWarnings = similarityResults.some(
     (r) => r.similarityScore >= SIMILARITY_THRESHOLD,
   );
-  const allClear = hasResults && !hasWarnings;
-  const sourceLines = lyricsDraftText.trim()
-    ? splitLines(lyricsDraftText)
-    : generatedLyrics.map((line) => line.text.trim()).filter(Boolean);
+  const allClear = hasCheckedOnce && !isChecking && !hasWarnings;
+  const sourceLines = splitLines(lyricsToCheck);
+
+  const handleRunCheck = async () => {
+    if (!hasLyrics || isChecking) return;
+    await checkSimilarity(lyricsToCheck);
+    if (!useAppStore.getState().error) {
+      setHasCheckedOnce(true);
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Similarity Check</CardTitle>
-      </CardHeader>
+    <Card className="border-transparent bg-transparent p-0 shadow-none">
+      <RoughPanel
+        className="rounded-xl bg-surface px-5 py-5"
+        color="ink"
+        strokeWidth={1.65}
+        iterations={3}
+        padding={10}
+        animationDuration={460}
+      >
+        <CardHeader>
+          <CardTitle>Similarity Check</CardTitle>
+        </CardHeader>
 
-      <div className="flex flex-col gap-4">
-        <Button
-          variant="secondary"
-          onClick={() => checkSimilarity()}
-          disabled={!hasLyrics || isChecking}
-          className="w-full"
-        >
-          {isChecking ? (
-            <Loading size="sm" />
-          ) : (
-            <Shield className="h-4 w-4" />
-          )}
-          {isChecking ? "Checking..." : "Run Similarity Check"}
-        </Button>
-
-        {!hasResults && !isChecking && (
-          <p className="text-sm text-muted">
-            Compare your draft against known song patterns and references.
-          </p>
-        )}
-
-        {isChecking && (
-          <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
-            Analyzing phrase structure and semantic overlap...
-          </div>
-        )}
-
-        {allClear && (
-          <div className="flex items-center gap-2 rounded-lg bg-confirm-green-light px-4 py-3">
-            <CheckCircle className="h-5 w-5 text-confirm-green" />
-            <span className="text-sm font-medium text-confirm-green">
-              No high-similarity references were found.
-            </span>
-          </div>
-        )}
-
-        {hasResults && (
-          <motion.ul
-            className="flex flex-col gap-2"
-            initial="hidden"
-            animate="show"
-            variants={{
-              hidden: {},
-              show: { transition: { staggerChildren: 0.07 } },
-            }}
+        <div className="flex flex-col gap-4">
+          <Button
+            variant="secondary"
+            onClick={() => void handleRunCheck()}
+            disabled={!hasLyrics || isChecking}
+            className="w-full"
           >
-            {similarityResults.map((result, i) => (
-              <SimilarityItem
-                key={i}
-                result={result}
-                sourceLine={findBestSourceLine(sourceLines, result.matchedLine)}
-              />
-            ))}
-          </motion.ul>
-        )}
-      </div>
+            {isChecking ? (
+              <Loading size="sm" />
+            ) : (
+              <Shield className="h-4 w-4" />
+            )}
+            {isChecking ? "Checking..." : "Run Similarity Check"}
+          </Button>
+
+          {!hasCheckedOnce && !isChecking && (
+            <p className="text-sm text-muted">
+              Compare your draft against known song patterns and references.
+            </p>
+          )}
+
+          {isChecking && (
+            <RoughPanel
+              className="rounded-lg bg-surface px-4 py-3 text-sm text-muted"
+              color="ink"
+              strokeWidth={1.2}
+              iterations={2}
+              padding={7}
+              animationDuration={320}
+            >
+              Analyzing phrase structure and semantic overlap...
+            </RoughPanel>
+          )}
+
+          {allClear && (
+            <RoughPanel
+              className="flex items-center gap-2 rounded-lg bg-confirm-green-light px-4 py-3"
+              color="confirm"
+              strokeWidth={1.35}
+              iterations={2}
+              padding={8}
+              animationDuration={320}
+            >
+              <CheckCircle className="h-5 w-5 text-confirm-green" />
+              <span className="text-sm font-medium text-confirm-green">
+                No high-similarity references were found.
+              </span>
+            </RoughPanel>
+          )}
+
+          {hasResults && (
+            <motion.ul
+              className="flex flex-col gap-3"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: {},
+                show: { transition: { staggerChildren: 0.07 } },
+              }}
+            >
+              {similarityResults.map((result, i) => (
+                <SimilarityItem
+                  key={i}
+                  result={result}
+                  sourceLine={findBestSourceLine(sourceLines, result.matchedLine)}
+                />
+              ))}
+            </motion.ul>
+          )}
+        </div>
+      </RoughPanel>
     </Card>
   );
 }
@@ -203,96 +280,111 @@ function SimilarityItem({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
-      className={`rounded-lg border px-4 py-3 ${
-        isWarning
-          ? "border-warning-red/30 bg-warning-red-light"
-          : "border-border bg-surface"
-      }`}
+      className="list-none"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {isWarning && (
-              <AlertTriangle className="h-4 w-4 shrink-0 text-warning-red" />
-            )}
-            <span className="text-sm font-medium text-foreground">
-              {result.matchedSong.title}
-            </span>
-            <span className="text-xs text-muted">
-              {result.matchedSong.artist}
-            </span>
-          </div>
-
-          <div className="mt-2 rounded-md border border-border/70 bg-background/35 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-              Line comparison
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Your lyric:{" "}
-              <span className="text-foreground">
-                {sourceLine
-                  ? highlightOverlaps(sourceLine, overlapTokens, "source")
-                  : "-"}
+      <RoughPanel
+        className={`rounded-lg px-4 py-3 ${
+          isWarning ? "bg-warning-red-light/90" : "bg-surface"
+        }`}
+        color={isWarning ? "warning" : "ink"}
+        strokeWidth={isWarning ? 1.55 : 1.35}
+        iterations={isWarning ? 3 : 2}
+        padding={9}
+        animationDuration={360}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {isWarning && (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-warning-red" />
+              )}
+              <span className="text-sm font-medium text-foreground">
+                {result.matchedSong.title}
               </span>
-            </p>
-            <div className="mt-1">
-              <span className="text-xs text-muted">Reference song:</span>{" "}
-              <RoughAnnotationWrapper
-                type={isWarning ? "highlight" : "underline"}
-                show
-                color={isWarning ? "warning" : "rhyme"}
-                strokeWidth={1.5}
-                animationDuration={400}
-              >
-                <span className="text-sm text-muted">
-                  &ldquo;
-                  {highlightOverlaps(result.matchedLine, overlapTokens, "matched")}
-                  &rdquo;
+              <span className="text-xs text-muted">
+                {result.matchedSong.artist}
+              </span>
+            </div>
+
+            <RoughPanel
+              className="mt-2 rounded-md bg-background/35 px-3 py-2"
+              color={isWarning ? "warning" : "rhyme"}
+              strokeWidth={1.15}
+              iterations={2}
+              padding={6}
+              animationDuration={320}
+            >
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                Line comparison
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Your lyric:{" "}
+                <span className="text-foreground">
+                  {sourceLine
+                    ? highlightOverlaps(sourceLine, overlapTokens, "source")
+                    : "-"}
                 </span>
-              </RoughAnnotationWrapper>
+              </p>
+              <div className="mt-1">
+                <span className="text-xs text-muted">Reference song:</span>{" "}
+                <RoughAnnotationWrapper
+                  type={isWarning ? "highlight" : "underline"}
+                  show
+                  color={isWarning ? "warning" : "rhyme"}
+                  strokeWidth={1.5}
+                  animationDuration={400}
+                >
+                  <span className="text-sm text-muted">
+                    &ldquo;
+                    {highlightOverlaps(result.matchedLine, overlapTokens, "matched")}
+                    &rdquo;
+                  </span>
+                </RoughAnnotationWrapper>
+              </div>
+            </RoughPanel>
+
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-border">
+                <motion.div
+                  className={`h-full rounded-full ${
+                    isWarning ? "bg-warning-red" : "bg-rhyme-blue"
+                  }`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${scorePercent}%` }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                />
+              </div>
+              <span className="text-xs tabular-nums text-muted">{scorePercent}%</span>
             </div>
+
+            {sourceLine && (
+              <p className="mt-1 text-xs text-muted">
+                Estimated token overlap:{" "}
+                <span className="tabular-nums">{overlapPercent}%</span>
+              </p>
+            )}
+
+            {isWarning && (
+              <p className="mt-1 text-xs text-warning-red line-through decoration-warning-red/80">
+                Consider rewriting this expression further.
+              </p>
+            )}
           </div>
 
-          <div className="mt-2 flex items-center gap-2">
-            <div className="h-1.5 flex-1 rounded-full bg-border">
-              <motion.div
-                className={`h-full rounded-full ${
-                  isWarning ? "bg-warning-red" : "bg-rhyme-blue"
-                }`}
-                initial={{ width: 0 }}
-                animate={{ width: `${scorePercent}%` }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              />
-            </div>
-            <span className="text-xs tabular-nums text-muted">{scorePercent}%</span>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span
+              className={`text-sm font-medium tabular-nums ${
+                isWarning ? "text-warning-red" : "text-muted"
+              }`}
+            >
+              {scorePercent}%
+            </span>
+            <Badge variant={badgeVariant}>
+              {TYPE_LABELS[result.similarityType]}
+            </Badge>
           </div>
-
-          {sourceLine && (
-            <p className="mt-1 text-xs text-muted">
-              Estimated token overlap: <span className="tabular-nums">{overlapPercent}%</span>
-            </p>
-          )}
-
-          {isWarning && (
-            <p className="mt-1 text-xs text-warning-red line-through decoration-warning-red/80">
-              Consider rewriting this expression further.
-            </p>
-          )}
         </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span
-            className={`text-sm font-medium tabular-nums ${
-              isWarning ? "text-warning-red" : "text-muted"
-            }`}
-          >
-            {scorePercent}%
-          </span>
-          <Badge variant={badgeVariant}>
-            {TYPE_LABELS[result.similarityType]}
-          </Badge>
-        </div>
-      </div>
+      </RoughPanel>
     </motion.li>
   );
 }

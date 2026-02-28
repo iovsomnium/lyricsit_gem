@@ -19,6 +19,8 @@ type LyricsJSONResponse = {
   }>;
 };
 
+type LineMode = "ko-only" | "en-only" | "mixed";
+
 const VALID_GENRES = new Set<Genre>([
   "kpop",
   "hiphop",
@@ -103,16 +105,155 @@ function containsRhymeWord(text: string, ko: string, en: string): boolean {
   return lower.includes(ko.toLowerCase()) || lower.includes(en.toLowerCase());
 }
 
+function randomIndex(length: number): number {
+  return Math.floor(Math.random() * length);
+}
+
+function randomLanguage(): Language {
+  return Math.random() < 0.5 ? "ko" : "en";
+}
+
+function inferLanguageFromText(text: string, fallback: Language): Language {
+  const hasKo = /[가-힣]/u.test(text);
+  const hasEn = /[A-Za-z]/u.test(text);
+
+  if (hasKo && !hasEn) return "ko";
+  if (hasEn && !hasKo) return "en";
+  if (!hasKo && !hasEn) return fallback;
+
+  const koCount = (text.match(/[가-힣]/gu) ?? []).length;
+  const enCount = (text.match(/[A-Za-z]/g) ?? []).length;
+  return koCount >= enCount ? "ko" : "en";
+}
+
+function pickLineMode(weights: Record<LineMode, number>): LineMode {
+  const roll = Math.random();
+  if (roll < weights["ko-only"]) return "ko-only";
+  if (roll < weights["ko-only"] + weights["en-only"]) return "en-only";
+  return "mixed";
+}
+
+function buildRandomLinePlan(lineCount: number): LineMode[] {
+  if (lineCount <= 0) return [];
+
+  // Randomize weights each request so language mix ratio is never fixed.
+  const wKo = Math.random() + 0.2;
+  const wEn = Math.random() + 0.2;
+  const wMixed = Math.random() + 0.2;
+  const total = wKo + wEn + wMixed;
+  const weights: Record<LineMode, number> = {
+    "ko-only": wKo / total,
+    "en-only": wEn / total,
+    mixed: wMixed / total,
+  };
+
+  const plan = Array.from({ length: lineCount }, () => pickLineMode(weights));
+
+  const hasKo = plan.some((mode) => mode !== "en-only");
+  const hasEn = plan.some((mode) => mode !== "ko-only");
+  const hasMixed = plan.some((mode) => mode === "mixed");
+
+  if (!hasKo) plan[randomIndex(plan.length)] = "ko-only";
+  if (!hasEn) plan[randomIndex(plan.length)] = "en-only";
+  if (lineCount >= 3 && !hasMixed) plan[randomIndex(plan.length)] = "mixed";
+
+  return plan;
+}
+
+function lineModeLabel(mode: LineMode): string {
+  if (mode === "ko-only") return "Korean-only line";
+  if (mode === "en-only") return "English-only line";
+  return "Mixed Korean+English line";
+}
+
+function buildLinePlanInstructions(plan: LineMode[]): string {
+  return plan
+    .map((mode, i) => `- Line ${i + 1}: ${lineModeLabel(mode)}`)
+    .join("\n");
+}
+
+function createFallbackLine(
+  mode: LineMode,
+  request: Required<LyricsGenerateRequest>,
+): LyricsLine {
+  if (mode === "ko-only") {
+    return {
+      text: `${request.rhymePair.ko}를 품은 밤의 멜로디`,
+      language: "ko",
+      hasRhyme: true,
+    };
+  }
+
+  if (mode === "en-only") {
+    return {
+      text: `In the neon haze, ${request.rhymePair.en} keeps echoing`,
+      language: "en",
+      hasRhyme: true,
+    };
+  }
+
+  const mixedText = `${request.rhymePair.ko} in my heartbeat, ${request.rhymePair.en} in the night`;
+  return {
+    text: mixedText,
+    language: inferLanguageFromText(mixedText, randomLanguage()),
+    hasRhyme: true,
+  };
+}
+
+function ensureLanguageMix(
+  lines: LyricsLine[],
+  request: Required<LyricsGenerateRequest>,
+): void {
+  if (lines.length === 0) return;
+
+  const hasKoOnlyLine = (line: LyricsLine): boolean =>
+    /[가-힣]/u.test(line.text) && !/[A-Za-z]/u.test(line.text);
+  const hasMixedLine = (line: LyricsLine): boolean =>
+    /[가-힣]/u.test(line.text) && /[A-Za-z]/u.test(line.text);
+
+  let mixedIndex = -1;
+  if (!lines.some(hasMixedLine)) {
+    const i = randomIndex(lines.length);
+    const patched = `${request.rhymePair.ko} ${lines[i]?.text ?? ""} ${request.rhymePair.en}`.trim();
+    lines[i] = {
+      ...(lines[i] as LyricsLine),
+      text: patched,
+      language: inferLanguageFromText(patched, lines[i]?.language ?? randomLanguage()),
+      hasRhyme: true,
+    };
+    mixedIndex = i;
+  }
+
+  if (!lines.some(hasKoOnlyLine)) {
+    const i =
+      lines.length > 1 && mixedIndex >= 0
+        ? (mixedIndex + 1 + randomIndex(lines.length - 1)) % lines.length
+        : randomIndex(lines.length);
+    lines[i] = {
+      ...(lines[i] as LyricsLine),
+      text: `${request.rhymePair.ko}를 담은 한 줄`,
+      language: "ko",
+      hasRhyme: true,
+    };
+  }
+}
+
 function normalizeLyricsLines(
   rawLines: LyricsJSONResponse["lines"],
   request: Required<LyricsGenerateRequest>,
+  linePlan: LineMode[],
 ): LyricsLine[] {
   const normalized = (rawLines ?? [])
-    .map((line) => ({
-      text: line.text?.trim() ?? "",
-      language: line.language === "ko" || line.language === "en" ? line.language : "ko",
-      hasRhyme: Boolean(line.hasRhyme),
-    }))
+    .map((line) => {
+      const text = line.text?.trim() ?? "";
+      const modelLanguage =
+        line.language === "ko" || line.language === "en" ? line.language : randomLanguage();
+      return {
+        text,
+        language: inferLanguageFromText(text, modelLanguage),
+        hasRhyme: Boolean(line.hasRhyme),
+      };
+    })
     .filter((line) => line.text.length > 0);
 
   const capped = normalized.slice(0, request.lineCount);
@@ -124,22 +265,22 @@ function normalizeLyricsLines(
   }
 
   while (capped.length < request.lineCount) {
-    const fallbackLanguage: Language = capped.length % 2 === 0 ? "ko" : "en";
-    const fallbackText =
-      fallbackLanguage === "ko"
-        ? `${request.rhymePair.ko}를 담아낸 빈 줄`
-        : `A placeholder line with ${request.rhymePair.en}`;
-    capped.push({
-      text: fallbackText,
-      language: fallbackLanguage,
-      hasRhyme: true,
-    });
+    const mode = linePlan[capped.length] ?? "mixed";
+    capped.push(createFallbackLine(mode, request));
   }
+
+  ensureLanguageMix(capped, request);
 
   return capped;
 }
 
-function buildLyricsPrompt(request: Required<LyricsGenerateRequest>): string {
+function buildLyricsPrompt(
+  request: Required<LyricsGenerateRequest>,
+  linePlan: LineMode[],
+): string {
+  const randomTag = Math.random().toString(36).slice(2, 8);
+  const planInstructions = buildLinePlanInstructions(linePlan);
+
   return `
 You are a professional K-pop lyric writer.
 Return only JSON. No markdown.
@@ -152,7 +293,14 @@ Requirements:
   - Korean: "${request.rhymePair.ko}"
   - English: "${request.rhymePair.en}"
 - Keep lines singable and natural.
-- Mix Korean and English lines across the output.
+- Do not use a fixed language ratio.
+- Language balance must feel random and unpredictable each time.
+- Follow this random line plan exactly:
+${planInstructions}
+- At least one line should be mixed Korean+English.
+- At least one line should be Korean-only.
+- Avoid grouping all Korean lines first and all English lines later.
+- Random style tag: ${randomTag}
 - For each line, provide:
   - text
   - language ("ko" or "en")
@@ -171,11 +319,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const generateRequest = normalizeGenerateRequest(body);
-    const prompt = buildLyricsPrompt(generateRequest);
+    const linePlan = buildRandomLinePlan(generateRequest.lineCount);
+    const prompt = buildLyricsPrompt(generateRequest, linePlan);
     const payload = await generateJSON<LyricsJSONResponse>(prompt);
 
     const response: LyricsGenerateResponse = {
-      lines: normalizeLyricsLines(payload.lines, generateRequest),
+      lines: normalizeLyricsLines(payload.lines, generateRequest, linePlan),
       rhymePair: generateRequest.rhymePair,
       genre: generateRequest.genre,
       mood: generateRequest.mood,
@@ -198,4 +347,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
