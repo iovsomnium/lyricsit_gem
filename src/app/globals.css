@@ -1,26 +1,86 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* 기본 색상 */
+  --background: #faf8f5;
+  --foreground: #1a1a1a;
+
+  /* 노트/종이 톤 */
+  --surface: #ffffff;
+  --surface-hover: #f5f3f0;
+  --border: #e0dbd4;
+  --border-focus: #b8b0a4;
+
+  /* 잉크 색상 (작사가 노트 컨셉) */
+  --ink-black: #1a1a1a;
+  --ink-blue: #2b4c7e;
+  --ink-light: #5a7baa;
+
+  /* 기능 색상 */
+  --rhyme-blue: #3b6cb4;
+  --rhyme-blue-light: #dbe6f5;
+  --confirm-green: #3a8a5c;
+  --confirm-green-light: #dff0e5;
+  --warning-red: #c44545;
+  --warning-red-light: #fce4e4;
+  --highlight-yellow: #fef3c7;
+
+  /* 음영 */
+  --muted: #8a8279;
+  --muted-light: #c4bdb4;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-focus: var(--border-focus);
+  --color-ink-black: var(--ink-black);
+  --color-ink-blue: var(--ink-blue);
+  --color-ink-light: var(--ink-light);
+  --color-rhyme-blue: var(--rhyme-blue);
+  --color-rhyme-blue-light: var(--rhyme-blue-light);
+  --color-confirm-green: var(--confirm-green);
+  --color-confirm-green-light: var(--confirm-green-light);
+  --color-warning-red: var(--warning-red);
+  --color-warning-red-light: var(--warning-red-light);
+  --color-highlight-yellow: var(--highlight-yellow);
+  --color-muted: var(--muted);
+  --color-muted-light: var(--muted-light);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #121110;
+    --foreground: #e8e4df;
+
+    --surface: #1c1a18;
+    --surface-hover: #252320;
+    --border: #3a3632;
+    --border-focus: #5a5550;
+
+    --ink-black: #e8e4df;
+    --ink-blue: #7ba3d4;
+    --ink-light: #5a7baa;
+
+    --rhyme-blue: #7ba3d4;
+    --rhyme-blue-light: #1e2d42;
+    --confirm-green: #5cb87a;
+    --confirm-green-light: #1a2e22;
+    --warning-red: #e06060;
+    --warning-red-light: #2e1a1a;
+    --highlight-yellow: #3d3520;
+
+    --muted: #8a8279;
+    --muted-light: #4a4540;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

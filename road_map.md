@@ -2,8 +2,8 @@
 CrossRhyme 구현 로드맵
 ================================================================
 
-현재 상태: STEP 2 구현중 (STEP 1 완료, STEP 2-1/2-2 완료)
-남은 작업: STEP 2-3 → STEP 3부터 순서대로 구현
+현재 상태: STEP 1~7 전체 구현 완료
+남은 작업: 다듬기 (발음 시각화, 애니메이션, 반응형 등)
 
 ================================================================
 STEP 1. 기반 코드 (먼저 해야 다른 것들이 돌아감)
@@ -64,7 +64,7 @@ STEP 2. 한국어 발음 처리 (라임 엔진의 핵심)
 STEP 3. 라임 엔진 (핵심 로직)
 ================================================================
 
-- [ ] 3-1. 음소 유사도 — src/lib/rhyme-engine/similarity.ts
+- [x] 3-1. 음소 유사도 — src/lib/rhyme-engine/similarity.ts
   - 음절 단위 비교 (IPASyllableParts 기반, 문자 단위 Levenshtein 아님)
   - 음소 유사도 매트릭스 (모음 + 주요 자음)
     - 모음: 음향적 거리 기반 (예: /a/↔/ʌ/=0.2, /a/↔/u/=0.9)
@@ -76,7 +76,7 @@ STEP 3. 라임 엔진 (핵심 로직)
     - full = 전체 IPA 음절 시퀀스 유사도
   - 유사도 스코어 0~1로 정규화
 
-- [ ] 3-2. 라임 매칭 — src/lib/rhyme-engine/index.ts
+- [x] 3-2. 라임 매칭 — src/lib/rhyme-engine/index.ts
   - findRhymes(request) 메인 함수
   - 파이프라인:
     1. 입력 발음 분석 (analyzeKoreanPhonetics / analyzeEnglishPhonetics)
@@ -93,19 +93,19 @@ STEP 3. 라임 엔진 (핵심 로직)
 STEP 4. API 라우트
 ================================================================
 
-- [ ] 4-1. 라임 검색 API — src/app/api/rhyme/route.ts
+- [x] 4-1. 라임 검색 API — src/app/api/rhyme/route.ts
   - POST 핸들러
   - body에서 input, inputLanguage, targetLanguage, theme, maxResults 받기
   - 입력 발음 분석 → Gemini로 크로스링구얼 라임 후보 생성
   - 유사도 스코어 계산 후 정렬해서 응답
 
-- [ ] 4-2. 가사 생성 API — src/app/api/generate/route.ts
+- [x] 4-2. 가사 생성 API — src/app/api/generate/route.ts
   - POST 핸들러
   - body에서 rhymePair(ko, en), genre, mood, lineCount 받기
   - Gemini에 라임 쌍 + 장르 + 무드 전달해서 가사 생성
   - 시스템 프롬프트에 K-pop 코드스위칭 스타일 지시
 
-- [ ] 4-3. 가사 유사도 검사 API — src/app/api/similarity/route.ts
+- [x] 4-3. 가사 유사도 검사 API — src/app/api/similarity/route.ts
   - POST 핸들러
   - body에서 lyrics (생성된 가사 전문) 받기
   - 가사에서 핵심 구절(후렴구, 반복 패턴) 추출
@@ -123,13 +123,29 @@ STEP 4. API 라우트
 STEP 5. 상태 관리
 ================================================================
 
-- [ ] 5-1. Zustand 스토어 — src/hooks/useAppStore.ts
-  - inputText, inputLanguage, targetLanguage
-  - theme, genre, mood
-  - rhymeResults[], selectedRhymes[]
-  - generatedLyrics[]
-  - similarityResults[], isCheckingSimilarity
-  - isSearching, isGenerating, error
+5-A. 지금 정의 가능 (타입 기반, 백엔드 의존 없음)
+────────────────────────────────────────────────
+- [x] 5-1. Zustand 스토어 기본 구조 — src/hooks/useAppStore.ts
+  - 입력 상태: inputText, inputLanguage, targetLanguage
+  - 옵션 상태: theme, genre, mood
+  - 데이터 상태 (타입은 STEP 1에서 확정):
+    - rhymeResults: RhymeCandidate[]
+    - selectedRhymes: RhymePair[]
+    - generatedLyrics: LyricsLine[]
+    - similarityResults: SimilarityResult[]
+  - UI 상태: isSearching, isGenerating, isCheckingSimilarity, error
+  - 입력 액션: setInputText, setLanguage, setTheme, setGenre, setMood
+  - 선택 액션: selectRhyme, deselectRhyme, clearSelectedRhymes
+
+5-B. 백엔드 완성 후 확정 (API 응답 흐름에 의존)
+────────────────────────────────────────────────
+- [x] 5-2. API 연동 액션 — src/hooks/useAppStore.ts
+  - searchRhymes(): API 호출 → 로딩/에러/결과 상태 전이
+  - generateLyrics(): API 호출 → 스트리밍 or 일괄 응답 처리
+  - checkSimilarity(): API 호출 → 결과 매핑
+  - 에러 핸들링 전략 (재시도, 타임아웃, 에러 메시지)
+  - 캐싱 전략 (동일 입력 재요청 방지)
+  - API 응답 구조 변경 시 상태 매핑 조정
 
 ================================================================
 STEP 6. UI 컴포넌트
@@ -157,7 +173,7 @@ Rough Notation 활용 포인트:
   - 경고(유사도 높음): 빨간색 취소선
   - 확정: 초록색 밑줄
 
-- [ ] 6-1. 공통 UI — src/components/ui/
+- [x] 6-1. 공통 UI — src/components/ui/
   - Button, Input, Card, Badge, Select, Textarea
   - Loading spinner
   - RoughAnnotation 래퍼 컴포넌트 (rough-notation React 통합)
@@ -165,21 +181,21 @@ Rough Notation 활용 포인트:
     - 애니메이션 타이밍 커스터마이징
     - Framer Motion과 연동 (등장 시퀀스)
 
-- [ ] 6-2. 라임 입력 — src/components/rhyme/RhymeInput.tsx
+- [x] 6-2. 라임 입력 — src/components/rhyme/RhymeInput.tsx
   - 텍스트 입력 필드 (노트 위에 쓰는 느낌의 스타일링)
   - 입력 언어 토글 (한국어 ↔ 영어)
   - 테마 선택 (love, farewell, freedom 등)
   - 검색 버튼
   - 입력 중 실시간으로 음절 수 카운트 표시
 
-- [ ] 6-3. 라임 결과 — src/components/rhyme/RhymeResults.tsx
+- [x] 6-3. 라임 결과 — src/components/rhyme/RhymeResults.tsx
   - 라임 후보 카드 리스트
   - 각 카드: 단어, 발음(로마자/IPA), 유사도 바, 음절 수
   - 클릭하면 Rough Notation circle 애니메이션으로 선택 표시
   - 유사도 높은 후보에 highlight 자동 적용
   - 선택 해제 시 strike-through 후 페이드아웃
 
-- [ ] 6-4. 가사 생성 — src/components/lyrics/LyricsGenerator.tsx
+- [x] 6-4. 가사 생성 — src/components/lyrics/LyricsGenerator.tsx
   - 선택된 라임 쌍 표시 (bracket으로 묶어서)
   - 장르/무드 선택
   - "가사 생성" 버튼
@@ -187,14 +203,14 @@ Rough Notation 활용 포인트:
   - 각 라인에 라임 단어 underline 자동 표시
   - 한국어/영어 라인 색상 구분 (잉크 색 차이)
 
-- [ ] 6-5. 가사 에디터 — src/components/lyrics/LyricsEditor.tsx
+- [x] 6-5. 가사 에디터 — src/components/lyrics/LyricsEditor.tsx
   - 생성된 가사를 편집할 수 있는 textarea
   - 수정 시 원본에 strike-through, 새 텍스트 옆에 표시
   - 한국어/영어 라인 색상 구분
   - 확정된 라인에 box 표시
   - 복사 버튼
 
-- [ ] 6-6. 유사도 검사 — src/components/lyrics/SimilarityChecker.tsx
+- [x] 6-6. 유사도 검사 — src/components/lyrics/SimilarityChecker.tsx
   - "유사도 검사" 버튼
   - 검사 결과 카드 리스트
     - 유사 곡명 + 아티스트
@@ -208,15 +224,15 @@ Rough Notation 활용 포인트:
 STEP 7. 메인 페이지
 ================================================================
 
-- [ ] 7-1. 페이지 레이아웃 — src/app/page.tsx
+- [x] 7-1. 페이지 레이아웃 — src/app/page.tsx
   - 상단: 로고 + 설명
   - 좌측: 라임 입력 + 결과
   - 우측: 가사 생성 + 에디터
   - 또는 모바일 대응 단일 컬럼 플로우
 
-- [ ] 7-2. 레이아웃 — src/app/layout.tsx
-  - 폰트 설정 (Pretendard + Inter)
-  - 다크/라이트 테마
+- [x] 7-2. 레이아웃 — src/app/layout.tsx
+  - 폰트 설정 (Geist Sans + Geist Mono)
+  - 다크/라이트 테마 (CSS prefers-color-scheme)
 
 ================================================================
 구현 우선순위 (추천)
@@ -227,8 +243,10 @@ Phase 1 — 돌아가는 것부터
 → API만 완성해서 curl/Postman으로 테스트 가능한 상태
 
 Phase 2 — 화면 붙이기
-→ STEP 5 + 6 (6-1 ~ 6-5) + 7
+→ STEP 5-1 (스토어 기본 구조, 타입 기반으로 선행 가능)
+→ STEP 6 (6-1 ~ 6-5) + 7
 → rough-notation 설치 및 Rough Notation 래퍼 컴포넌트 구현
+→ STEP 5-2 (API 연동 액션, API 완성 후 연결)
 → 브라우저에서 라임 검색 + 가사 생성 가능한 상태
 → hand-drawn 스타일 인터랙션 적용
 
