@@ -2,8 +2,8 @@
 CrossRhyme 구현 로드맵
 ================================================================
 
-현재 상태: STEP 1 완료 (타입 정의 + Gemini 클라이언트 + 유틸리티 전부 완료)
-남은 작업: STEP 2부터 순서대로 구현
+현재 상태: STEP 2 구현중 (STEP 1 완료, STEP 2-1/2-2 완료)
+남은 작업: STEP 2-3 → STEP 3부터 순서대로 구현
 
 ================================================================
 STEP 1. 기반 코드 (먼저 해야 다른 것들이 돌아감)
@@ -36,7 +36,7 @@ STEP 1. 기반 코드 (먼저 해야 다른 것들이 돌아감)
 STEP 2. 한국어 발음 처리 (라임 엔진의 핵심)
 ================================================================
 
-- [ ] 2-1. 한글 분해 — src/lib/phonetics/korean-ipa.ts
+- [x] 2-1. 한글 분해 — src/lib/phonetics/korean-ipa.ts
   - 한글 유니코드 → 초성/중성/종성 분해
   - 초성/중성/종성 → IPA 매핑 테이블
   - 초성/중성/종성 → 로마자 매핑 테이블
@@ -45,23 +45,49 @@ STEP 2. 한국어 발음 처리 (라임 엔진의 핵심)
   - 함수: koreanToRoman(text) → string
   - 함수: countKoreanSyllables(text) → number
 
-- [ ] 2-2. 영어 발음 처리 — src/lib/phonetics/english-ipa.ts
+- [x] 2-2. 영어 발음 처리 — src/lib/phonetics/english-ipa.ts
   - 영어 음절 수 추정 함수 (모음 기반 heuristic)
+  - heuristic IPA 변환 (multi-letter 규칙 + 예외 사전)
+  - ARPABET → IPA 변환 (CMU Dictionary 연동용)
   - 추후: CMU Pronouncing Dictionary JSON 로드해서 정확한 IPA 조회
+
+- [x] 2-3. 통합 IPA 음절 파싱 — src/lib/phonetics/ipa-syllable.ts
+  - 한/영 공통 IPASyllableParts 인터페이스 (syllable, onset, nucleus, coda, tail)
+  - 영어 IPA → onset/nucleus/coda 분해 (parseEnglishIPASyllable)
+  - 한국어 parseKoreanIPASyllable과 동일한 출력 구조
+  - getEnglishIPARhymeTail() — 영어 마지막 음절의 tail 추출
+  - IPA 정규화 레이어: 크로스링구얼 음소 매핑
+    - /k̚/ → /k/, /ɾ/ → /ɹ/, /tɕ/ → /tʃ/ 등
+    - 비교 전 양쪽 IPA를 정규화해서 체계 불일치 해소
 
 ================================================================
 STEP 3. 라임 엔진 (핵심 로직)
 ================================================================
 
 - [ ] 3-1. 음소 유사도 — src/lib/rhyme-engine/similarity.ts
-  - IPA 문자열 간 Levenshtein distance 계산
+  - 음절 단위 비교 (IPASyllableParts 기반, 문자 단위 Levenshtein 아님)
+  - 음소 유사도 매트릭스 (모음 + 주요 자음)
+    - 모음: 음향적 거리 기반 (예: /a/↔/ʌ/=0.2, /a/↔/u/=0.9)
+    - 자음: 종성(coda)에 등장하는 주요 자음 간 거리 (예: /ŋ/↔/n/=0.3)
+    - 크로스링구얼 매핑 포함 (정규화 후 비교)
+  - 유사도 스코어 산출 공식:
+    - score = tailSimilarity * 0.7 + fullSimilarity * 0.3
+    - tail = 마지막 음절의 nucleus + coda (라임의 핵심)
+    - full = 전체 IPA 음절 시퀀스 유사도
   - 유사도 스코어 0~1로 정규화
-  - 모음 유사성 가중치 (라임은 모음이 더 중요)
 
 - [ ] 3-2. 라임 매칭 — src/lib/rhyme-engine/index.ts
   - findRhymes(request) 메인 함수
-  - 입력 발음 분석 → Gemini에 후보 요청 → 유사도 계산 → 정렬 반환
-  - Gemini 프롬프트: "이 한국어 발음과 비슷한 영어 단어 10개 찾아줘" 방식
+  - 파이프라인:
+    1. 입력 발음 분석 (analyzeKoreanPhonetics / analyzeEnglishPhonetics)
+    2. Gemini에 후보 단어만 요청 (IPA는 로컬 생성)
+    3. 각 후보에 대해 로컬 englishToIPA() → IPA 생성
+    4. IPASyllableParts로 분해 → 유사도 계산
+    5. 스코어 기준 정렬 → RhymeCandidate[] 반환
+  - Gemini 프롬프트: "이 한국어 발음과 비슷한 영어 단어 N개 찾아줘" 방식
+  - Gemini는 단어 목록만 반환 (발음 정보는 로컬 처리)
+  - 검색 버튼 클릭 시에만 요청 (실시간 요청 아님)
+  - 동일 입력에 대한 결과 캐싱 (Map 기반 인메모리)
 
 ================================================================
 STEP 4. API 라우트
