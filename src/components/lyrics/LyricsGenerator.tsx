@@ -51,11 +51,10 @@ export function LyricsGenerator() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>가사 생성</CardTitle>
+        <CardTitle>Generate Lyrics</CardTitle>
       </CardHeader>
 
       <div className="flex flex-col gap-4">
-        {/* 선택된 라임 쌍 */}
         {hasRhymes ? (
           <div className="flex flex-wrap gap-2">
             {selectedRhymes.map((pair) => (
@@ -78,27 +77,25 @@ export function LyricsGenerator() {
           </div>
         ) : (
           <p className="text-sm text-muted">
-            라임 후보에서 단어를 선택하면 여기에 표시됩니다.
+            Selected rhyme pairs will appear here.
           </p>
         )}
 
-        {/* 장르 / 무드 */}
         <div className="grid grid-cols-2 gap-3">
           <Select
-            label="장르"
+            label="Genre"
             value={genre}
             onChange={(e) => setGenre(e.target.value as Genre)}
             options={GENRE_OPTIONS}
           />
           <Select
-            label="무드"
+            label="Mood"
             value={mood}
             onChange={(e) => setMood(e.target.value as Mood)}
             options={MOOD_OPTIONS}
           />
         </div>
 
-        {/* 생성 버튼 */}
         <Button
           onClick={handleGenerate}
           disabled={!hasRhymes || isGenerating}
@@ -109,12 +106,12 @@ export function LyricsGenerator() {
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          {isGenerating ? "생성 중..." : "가사 생성"}
+          {isGenerating ? "Generating..." : "Generate Lyrics"}
         </Button>
 
         {!hasRhymes && (
           <Badge variant="muted" className="self-center">
-            라임 쌍을 먼저 선택해주세요
+            Select at least one rhyme pair first
           </Badge>
         )}
       </div>

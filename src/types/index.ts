@@ -116,6 +116,10 @@ export interface LyricsLine {
   language: Language;
   /** Whether this line contains a rhyming word from the pair */
   hasRhyme: boolean;
+  /** The specific rhyme word used in this line (if hasRhyme is true) */
+  rhymeWord?: string;
+  /** The matching rhyme pair for reference */
+  rhymePair?: RhymePair;
 }
 
 /** Request payload for POST /api/generate */
@@ -199,4 +203,42 @@ export interface AppError {
 export interface ApiErrorResponse {
   /** Error information */
   error: AppError;
+}
+
+// ============================================================
+// Saved Lyrics Memo Types
+// ============================================================
+
+/** Metadata for saved lyrics memo */
+export interface LyricsMemoMetadata {
+  /** The rhyme pair used for generation */
+  rhymePair?: RhymePair;
+  /** Genre used for generation */
+  genre?: Genre;
+  /** Mood used for generation */
+  mood?: Mood;
+  /** Number of lines in the lyrics */
+  lineCount: number;
+  /** Whether similarity check has been performed */
+  hasBeenChecked: boolean;
+  /** Results from last similarity check */
+  lastCheckResults?: SimilarityResult[];
+}
+
+/** A saved lyrics memo with metadata */
+export interface SavedLyricsMemo {
+  /** Unique identifier (crypto.randomUUID()) */
+  id: string;
+  /** Title (first line preview, max 30 chars) */
+  title: string;
+  /** Full lyrics text content */
+  content: string;
+  /** Structured lyrics lines */
+  lines: LyricsLine[];
+  /** Creation timestamp (Date.now()) */
+  createdAt: number;
+  /** Last update timestamp (Date.now()) */
+  updatedAt: number;
+  /** Associated metadata */
+  metadata: LyricsMemoMetadata;
 }

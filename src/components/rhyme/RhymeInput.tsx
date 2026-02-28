@@ -16,14 +16,14 @@ import type { Language, Theme } from "@/types";
 // ============================================================
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "love", label: "사랑 (Love)" },
-  { value: "farewell", label: "이별 (Farewell)" },
-  { value: "freedom", label: "자유 (Freedom)" },
-  { value: "dream", label: "꿈 (Dream)" },
-  { value: "night", label: "밤 (Night)" },
-  { value: "youth", label: "청춘 (Youth)" },
-  { value: "pain", label: "아픔 (Pain)" },
-  { value: "party", label: "파티 (Party)" },
+  { value: "love", label: "Love" },
+  { value: "farewell", label: "Farewell" },
+  { value: "freedom", label: "Freedom" },
+  { value: "dream", label: "Dream" },
+  { value: "night", label: "Night" },
+  { value: "youth", label: "Youth" },
+  { value: "pain", label: "Pain" },
+  { value: "party", label: "Party" },
 ];
 
 // ============================================================
@@ -62,7 +62,7 @@ export function RhymeInput() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>라임 검색</CardTitle>
+        <CardTitle>Find Rhymes</CardTitle>
       </CardHeader>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -82,7 +82,7 @@ export function RhymeInput() {
             onChange={(e) => setInputText(e.target.value)}
             placeholder={
               inputLanguage === "ko"
-                ? "한국어 단어나 구절을 입력하세요"
+                ? "Enter a Korean word or phrase"
                 : "Enter an English word or phrase"
             }
             disabled={isSearching}
@@ -90,24 +90,22 @@ export function RhymeInput() {
           />
           {inputText.trim() && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted tabular-nums">
-              {syllableCount}음절
+              {syllableCount} syllables
             </span>
           )}
         </div>
 
-        {/* 테마 선택 */}
         <Select
-          label="테마 (선택)"
+          label="Theme (optional)"
           value={theme ?? ""}
           onChange={(e) => {
             const val = e.target.value;
             setTheme(val ? (val as Theme) : null);
           }}
-          placeholder="테마를 선택하세요"
+          placeholder="Select a theme"
           options={THEME_OPTIONS}
         />
 
-        {/* 검색 버튼 */}
         <Button
           type="submit"
           disabled={!inputText.trim() || isSearching}
@@ -118,7 +116,7 @@ export function RhymeInput() {
           ) : (
             <Search className="h-4 w-4" />
           )}
-          {isSearching ? "검색 중..." : "라임 검색"}
+          {isSearching ? "Searching..." : "Search Rhymes"}
         </Button>
       </form>
     </Card>
@@ -142,9 +140,7 @@ function LanguageToggle({
       onClick={onChange}
       className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium transition-colors hover:bg-surface-hover"
     >
-      <span className={value === "ko" ? "text-foreground" : "text-muted-light"}>
-        한국어
-      </span>
+      <span className={value === "ko" ? "text-foreground" : "text-muted-light"}>Korean</span>
       <span className="text-muted-light">↔</span>
       <span className={value === "en" ? "text-ink-blue font-semibold" : "text-muted-light"}>
         English

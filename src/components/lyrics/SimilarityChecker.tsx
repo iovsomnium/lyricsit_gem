@@ -13,9 +13,9 @@ import type { SimilarityResult, SimilarityType } from "@/types";
 const SIMILARITY_THRESHOLD = 0.7;
 
 const TYPE_LABELS: Record<SimilarityType, string> = {
-  exact: "정확 일치",
-  semantic: "의미 유사",
-  structural: "구조 유사",
+  exact: "Exact",
+  semantic: "Semantic",
+  structural: "Structural",
 };
 
 function splitLines(text: string): string[] {
@@ -122,7 +122,7 @@ export function SimilarityChecker() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>유사도 검사</CardTitle>
+        <CardTitle>Similarity Check</CardTitle>
       </CardHeader>
 
       <div className="flex flex-col gap-4">
@@ -137,18 +137,18 @@ export function SimilarityChecker() {
           ) : (
             <Shield className="h-4 w-4" />
           )}
-          {isChecking ? "검사 중..." : "유사도 검사"}
+          {isChecking ? "Checking..." : "Run Similarity Check"}
         </Button>
 
         {!hasResults && !isChecking && (
           <p className="text-sm text-muted">
-            생성한 가사를 기준으로 기존 곡과의 유사도를 검사합니다.
+            Compare your draft against known song patterns and references.
           </p>
         )}
 
         {isChecking && (
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
-            구절 패턴과 의미 구조를 분석하고 있어요...
+            Analyzing phrase structure and semantic overlap...
           </div>
         )}
 
@@ -156,7 +156,7 @@ export function SimilarityChecker() {
           <div className="flex items-center gap-2 rounded-lg bg-confirm-green-light px-4 py-3">
             <CheckCircle className="h-5 w-5 text-confirm-green" />
             <span className="text-sm font-medium text-confirm-green">
-              유사한 기존 곡이 발견되지 않았습니다.
+              No high-similarity references were found.
             </span>
           </div>
         )}
@@ -225,10 +225,10 @@ function SimilarityItem({
 
           <div className="mt-2 rounded-md border border-border/70 bg-background/35 px-3 py-2">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-              구절 비교
+              Line comparison
             </p>
             <p className="mt-1 text-xs text-muted">
-              생성 가사:{" "}
+              Your lyric:{" "}
               <span className="text-foreground">
                 {sourceLine
                   ? highlightOverlaps(sourceLine, overlapTokens, "source")
@@ -236,7 +236,7 @@ function SimilarityItem({
               </span>
             </p>
             <div className="mt-1">
-              <span className="text-xs text-muted">기존 곡:</span>{" "}
+              <span className="text-xs text-muted">Reference song:</span>{" "}
               <RoughAnnotationWrapper
                 type={isWarning ? "highlight" : "underline"}
                 show
@@ -269,13 +269,13 @@ function SimilarityItem({
 
           {sourceLine && (
             <p className="mt-1 text-xs text-muted">
-              어휘 겹침 추정치: <span className="tabular-nums">{overlapPercent}%</span>
+              Estimated token overlap: <span className="tabular-nums">{overlapPercent}%</span>
             </p>
           )}
 
           {isWarning && (
             <p className="mt-1 text-xs text-warning-red line-through decoration-warning-red/80">
-              표현을 조금 더 변형하는 것을 권장합니다.
+              Consider rewriting this expression further.
             </p>
           )}
         </div>

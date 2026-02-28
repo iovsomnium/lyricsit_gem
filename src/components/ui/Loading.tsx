@@ -21,7 +21,7 @@ export function Loading({ size = "md", className, label }: LoadingProps) {
           sizeStyles[size],
         )}
         role="status"
-        aria-label={label ?? "로딩 중"}
+        aria-label={label ?? "Loading"}
       />
       {label && <span className="text-sm text-muted">{label}</span>}
     </div>

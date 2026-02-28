@@ -16,6 +16,7 @@ import type {
   SimilarityResult,
   AppError,
   Phonetics,
+  SavedLyricsMemo,
 } from "@/types";
 
 // ============================================================
@@ -40,6 +41,9 @@ interface AppState {
   generatedLyrics: LyricsLine[];
   lyricsDraftText: string;
   similarityResults: SimilarityResult[];
+
+  // 메모 상태
+  savedMemos: SavedLyricsMemo[];
 
   // UI 상태
   isSearching: boolean;
@@ -74,6 +78,13 @@ interface AppActions {
   clearError: () => void;
   resetAll: () => void;
 
+  // 메모 액션
+  loadMemosFromStorage: () => void;
+  saveMemo: (memo: Omit<SavedLyricsMemo, "id" | "createdAt" | "updatedAt">) => void;
+  deleteMemo: (id: string) => void;
+  clearAllMemos: () => void;
+  checkMemoSimilarity: (id: string) => Promise<void>;
+
   // API 연동 액션 (5-B)
   searchRhymes: () => Promise<void>;
   generateLyrics: (options?: {
@@ -100,6 +111,7 @@ const initialState: AppState = {
   generatedLyrics: [],
   lyricsDraftText: "",
   similarityResults: [],
+  savedMemos: [],
   isSearching: false,
   isGenerating: false,
   isCheckingSimilarity: false,
@@ -112,6 +124,69 @@ const LYRICS_CACHE = new Map<string, LyricsGenerateResponse>();
 const LYRICS_INFLIGHT = new Map<string, Promise<LyricsGenerateResponse>>();
 const SIMILARITY_CACHE = new Map<string, SimilarityResponse>();
 const SIMILARITY_INFLIGHT = new Map<string, Promise<SimilarityResponse>>();
+
+// ============================================================
+// localStorage Utilities
+// ============================================================
+
+const STORAGE_KEY = "crossrhyme:saved-lyrics";
+const MAX_MEMOS = 50;
+const MAX_STORAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
+function loadMemosFromLocalStorage(): SavedLyricsMemo[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored) as unknown;
+    if (!Array.isArray(parsed)) {
+      console.warn("Invalid memos data in localStorage, resetting");
+      return [];
+    }
+
+    return parsed as SavedLyricsMemo[];
+  } catch (error) {
+    console.error("Failed to load memos from localStorage:", error);
+    // Backup corrupted data
+    try {
+      const corrupted = localStorage.getItem(STORAGE_KEY);
+      if (corrupted) {
+        localStorage.setItem(`${STORAGE_KEY}-backup-${Date.now()}`, corrupted);
+      }
+    } catch {
+      // Ignore backup failure
+    }
+    return [];
+  }
+}
+
+function saveMemosToLocalStorage(memos: SavedLyricsMemo[]): AppError | null {
+  try {
+    const serialized = JSON.stringify(memos);
+
+    // Check size limit
+    if (serialized.length > MAX_STORAGE_SIZE) {
+      return {
+        code: "INVALID_INPUT",
+        message: "Storage limit exceeded. Delete some saved memos and try again.",
+      };
+    }
+
+    localStorage.setItem(STORAGE_KEY, serialized);
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.name === "QuotaExceededError") {
+      return {
+        code: "INVALID_INPUT",
+        message: "Not enough storage space. Delete some saved memos and try again.",
+      };
+    }
+    return {
+      code: "NETWORK_ERROR",
+      message: "An error occurred while saving your memo.",
+    };
+  }
+}
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_RETRY_COUNT = 1;
@@ -230,7 +305,7 @@ async function fetchJSONWithRetry<T>(
         isAppError(error)
           ? error
           : error instanceof DOMException && error.name === "AbortError"
-            ? toUnknownError("요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
+            ? toUnknownError("The request timed out. Please try again in a moment.")
             : toUnknownError(error instanceof Error ? error.message : "Network request failed.");
 
       const canRetry = appError.code === "NETWORK_ERROR" && attempt < retries;
@@ -360,7 +435,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     if (!input) {
       set({
-        error: { code: "INVALID_INPUT", message: "검색할 텍스트를 입력해주세요." },
+        error: { code: "INVALID_INPUT", message: "Enter text before searching for rhymes." },
       });
       return;
     }
@@ -400,7 +475,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         error: isAppError(error)
           ? error
-          : toUnknownError("라임 검색 중 오류가 발생했습니다."),
+          : toUnknownError("An error occurred while searching rhymes."),
       });
     } finally {
       set({ isSearching: false });
@@ -415,7 +490,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         error: {
           code: "INVALID_INPUT",
-          message: "가사 생성을 위해 라임 페어를 먼저 선택해주세요.",
+          message: "Select a rhyme pair before generating lyrics.",
         },
       });
       return;
@@ -454,7 +529,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         error: isAppError(error)
           ? error
-          : toUnknownError("가사 생성 중 오류가 발생했습니다."),
+          : toUnknownError("An error occurred while generating lyrics."),
       });
     } finally {
       set({ isGenerating: false });
@@ -476,7 +551,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         error: {
           code: "INVALID_INPUT",
-          message: "유사도 검사를 위해 가사를 먼저 준비해주세요.",
+          message: "Prepare lyrics before running the similarity check.",
         },
       });
       return;
@@ -511,10 +586,161 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         error: isAppError(error)
           ? error
-          : toUnknownError("유사도 검사 중 오류가 발생했습니다."),
+          : toUnknownError("An error occurred while running similarity check."),
+      });
+    } finally {
+      set({ isCheckingSimilarity: false });
+    }
+  },
+
+  // ============================================================
+  // 메모 액션
+  // ============================================================
+
+  loadMemosFromStorage: () => {
+    const memos = loadMemosFromLocalStorage();
+    set({ savedMemos: memos });
+  },
+
+  saveMemo: (memo) => {
+    const state = get();
+
+    // 빈 가사 체크
+    if (!memo.content.trim()) {
+      set({
+        error: {
+          code: "INVALID_INPUT",
+          message: "No lyrics to save.",
+        },
+      });
+      return;
+    }
+
+    // 최대 개수 체크
+    if (state.savedMemos.length >= MAX_MEMOS) {
+      set({
+        error: {
+          code: "INVALID_INPUT",
+          message: `You can save up to ${MAX_MEMOS} memos.`,
+        },
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const newMemo: SavedLyricsMemo = {
+      ...memo,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const updatedMemos = [newMemo, ...state.savedMemos];
+
+    // localStorage에 저장
+    const saveError = saveMemosToLocalStorage(updatedMemos);
+    if (saveError) {
+      set({ error: saveError });
+      return;
+    }
+
+    set({
+      savedMemos: updatedMemos,
+      error: null,
+    });
+  },
+
+  deleteMemo: (id) => {
+    const state = get();
+    const updatedMemos = state.savedMemos.filter((memo) => memo.id !== id);
+
+    const saveError = saveMemosToLocalStorage(updatedMemos);
+    if (saveError) {
+      set({ error: saveError });
+      return;
+    }
+
+    set({ savedMemos: updatedMemos });
+  },
+
+  clearAllMemos: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    set({ savedMemos: [] });
+  },
+
+  checkMemoSimilarity: async (id) => {
+    const state = get();
+    const memo = state.savedMemos.find((m) => m.id === id);
+
+    if (!memo) {
+      set({
+        error: {
+          code: "INVALID_INPUT",
+          message: "Memo not found.",
+        },
+      });
+      return;
+    }
+
+    const payload: SimilarityRequest = {
+      lyrics: memo.content,
+    };
+    const cacheKey = JSON.stringify(payload);
+
+    set({
+      isCheckingSimilarity: true,
+      error: null,
+    });
+
+    try {
+      const response = await getCachedOrFetch(
+        cacheKey,
+        SIMILARITY_CACHE,
+        SIMILARITY_INFLIGHT,
+        () =>
+          fetchJSONWithRetry<SimilarityResponse>("/api/similarity", payload, {
+            retries: 1,
+            timeoutMs: SIMILARITY_TIMEOUT_MS,
+          }),
+      );
+
+      // 메모 업데이트
+      const updatedMemos = state.savedMemos.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              metadata: {
+                ...m.metadata,
+                hasBeenChecked: true,
+                lastCheckResults: response.results,
+              },
+              updatedAt: Date.now(),
+            }
+          : m
+      );
+
+      const saveError = saveMemosToLocalStorage(updatedMemos);
+      if (saveError) {
+        set({ error: saveError });
+        return;
+      }
+
+      set({
+        savedMemos: updatedMemos,
+      });
+    } catch (error) {
+      set({
+        error: isAppError(error)
+          ? error
+          : toUnknownError("An error occurred while running similarity check."),
       });
     } finally {
       set({ isCheckingSimilarity: false });
     }
   },
 }));
+
+// 초기화 시 localStorage에서 메모 로드
+if (typeof window !== "undefined") {
+  useAppStore.getState().loadMemosFromStorage();
+}

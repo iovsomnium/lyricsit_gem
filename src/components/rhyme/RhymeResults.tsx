@@ -11,11 +11,11 @@ import type { RhymeCandidate } from "@/types";
 
 const HIGH_SIMILARITY_THRESHOLD = 0.78;
 
-function splitIpaTail(ipa: string): { head: string; tail: string } {
-  const trimmed = ipa.trim();
+function splitPronunciationTail(pronunciation: string): { head: string; tail: string } {
+  const trimmed = pronunciation.trim();
   if (!trimmed) return { head: "", tail: "" };
 
-  const chunks = trimmed.split(/\s+/);
+  const chunks = trimmed.split(/[-\s]+/u).filter(Boolean);
   if (chunks.length === 1) {
     return { head: "", tail: chunks[0] };
   }
@@ -52,12 +52,12 @@ export function RhymeResults() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>라임 후보</CardTitle>
-          <Badge variant="muted">검색 중</Badge>
+          <CardTitle>Rhyme Candidates</CardTitle>
+          <Badge variant="muted">Searching</Badge>
         </CardHeader>
         <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-4 text-sm text-muted">
           <Loading size="sm" />
-          <span>발음 유사도를 계산하며 후보를 정리하고 있어요...</span>
+          <span>Calculating phonetic similarity and ranking candidates...</span>
         </div>
       </Card>
     );
@@ -116,8 +116,8 @@ export function RhymeResults() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>라임 후보</CardTitle>
-        <Badge variant="muted">{rhymeResults.length}개</Badge>
+        <CardTitle>Rhyme Candidates</CardTitle>
+        <Badge variant="muted">{rhymeResults.length} found</Badge>
       </CardHeader>
 
       <motion.ul
@@ -133,7 +133,7 @@ export function RhymeResults() {
           <CandidateItem
             key={candidate.word}
             candidate={candidate}
-            inputIpa={inputPhonetics?.ipa ?? ""}
+            inputRomanized={inputPhonetics?.romanized ?? ""}
             selected={isSelected(candidate)}
             isRemoving={removingWords.has(candidate.word)}
             onToggle={() => toggleSelect(candidate)}
@@ -146,13 +146,13 @@ export function RhymeResults() {
 
 function CandidateItem({
   candidate,
-  inputIpa,
+  inputRomanized,
   selected,
   isRemoving,
   onToggle,
 }: {
   candidate: RhymeCandidate;
-  inputIpa: string;
+  inputRomanized: string;
   selected: boolean;
   isRemoving: boolean;
   onToggle: () => void;
@@ -219,29 +219,28 @@ function CandidateItem({
                 strokeWidth={1}
                 animationDuration={350}
               >
-                <Badge variant="muted">고유사도</Badge>
+                <Badge variant="muted">High match</Badge>
               </RoughAnnotationWrapper>
             )}
             {candidate.syllableMatch && (
-              <Badge variant="success">음절 일치</Badge>
+              <Badge variant="success">Syllable match</Badge>
             )}
-            {isRemoving && <Badge variant="warning">선택 해제</Badge>}
+            {isRemoving && <Badge variant="warning">Removing</Badge>}
           </div>
           <ScoreBar score={scorePercent} />
         </div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-          <span className="break-all">{candidate.phonetics.romanized}</span>
-          <span className="break-all font-mono text-muted-light">
-            {candidate.phonetics.ipa}
+          <span className="break-all">
+            Pronunciation: {candidate.phonetics.romanized || candidate.word}
           </span>
-          <span>{candidate.phonetics.syllableCount}음절</span>
+          <span>{candidate.phonetics.syllableCount} syllables</span>
         </div>
 
-        {inputIpa && (
-          <IPAComparison
-            inputIpa={inputIpa}
-            candidateIpa={candidate.phonetics.ipa}
+        {inputRomanized && (
+          <PronunciationComparison
+            inputRomanized={inputRomanized}
+            candidateRomanized={candidate.phonetics.romanized}
           />
         )}
       </button>
@@ -265,30 +264,30 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
-function IPAComparison({
-  inputIpa,
-  candidateIpa,
+function PronunciationComparison({
+  inputRomanized,
+  candidateRomanized,
 }: {
-  inputIpa: string;
-  candidateIpa: string;
+  inputRomanized: string;
+  candidateRomanized: string;
 }) {
-  const source = splitIpaTail(inputIpa);
-  const target = splitIpaTail(candidateIpa);
+  const source = splitPronunciationTail(inputRomanized);
+  const target = splitPronunciationTail(candidateRomanized);
 
   return (
     <div className="mt-2 rounded-md border border-border/80 bg-background/40 px-3 py-2">
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-        IPA 비교
+        Pronunciation Comparison
       </p>
       <div className="mt-1 grid gap-1 text-xs sm:grid-cols-2">
-        <IpaLine label="입력" head={source.head} tail={source.tail} />
-        <IpaLine label="후보" head={target.head} tail={target.tail} />
+        <PronunciationLine label="Input" head={source.head} tail={source.tail} />
+        <PronunciationLine label="Candidate" head={target.head} tail={target.tail} />
       </div>
     </div>
   );
 }
 
-function IpaLine({
+function PronunciationLine({
   label,
   head,
   tail,
